@@ -1,10 +1,7 @@
 #!/bin/bash
 
-mkdir /tmp/ssh-mpc
-ssh-keygen -t rsa -b 4096 -N "" -f '/tmp/ssh-mpc/id_rsa'
-
 kubectl create secret generic 'aws-ssh-key' \
-  --from-file=id_rsa='/tmp/ssh-mpc/id_rsa' \
+  --from-file=id_rsa="${AWS_KEY_PAIR_PEM}" \
   --namespace 'multi-platform-controller'
 kubectl label secret 'aws-ssh-key' \
   'build.appstudio.redhat.com/multi-platform-secret=true' \

@@ -24,12 +24,13 @@ data:
     cost-center=666\
     "
 
-  # AWS GPU Nodes
+  # WINDOWS MACHINE 
+  dynamic.windows-c4xlarge-amd64.key-name: "filario-dev"  # CHANGE ME IF YOU'RE NOT FILARIO
+
   dynamic.windows-c4xlarge-amd64.type: "aws"
   dynamic.windows-c4xlarge-amd64.region: "eu-central-1"
   dynamic.windows-c4xlarge-amd64.ami: "ami-06916cb2793070d01"
   dynamic.windows-c4xlarge-amd64.instance-type: "c5.4xlarge"
-  dynamic.windows-c4xlarge-amd64.key-name: "id_rsa"
   dynamic.windows-c4xlarge-amd64.aws-secret: "aws-account"
   dynamic.windows-c4xlarge-amd64.ssh-secret: "aws-ssh-key"
   dynamic.windows-c4xlarge-amd64.security-group-id: "sg-0b80a3a448341f78f"
@@ -38,25 +39,7 @@ data:
   dynamic.windows-c4xlarge-amd64.allocation-timeout: "1200"
   dynamic.windows-c4xlarge-amd64.instance-tag: "dev-amd64-c4xlarge"
   dynamic.windows-c4xlarge-amd64.user-data: |-
-      Content-Type: multipart/mixed; boundary="//"
-      MIME-Version: 1.0
-
-      --//
-      Content-Type: text/cloud-config; charset="us-ascii"
-      MIME-Version: 1.0
-      Content-Transfer-Encoding: 7bit
-      Content-Disposition: attachment; filename="cloud-config.txt"
-
-      #cloud-config
-      cloud_final_modules:
-        - [scripts-user, always]
-
-      --//
-      Content-Type: text/x-shellscript; charset="us-ascii"
-      MIME-Version: 1.0
-      Content-Transfer-Encoding: 7bit
-      Content-Disposition: attachment; filename="userdata.txt"
-
+      <powershell>
       function Wait-Folder {
         param(
             [Parameter(Mandatory=$true)]
@@ -231,4 +214,5 @@ data:
       Remove-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' | Out-Null
       New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -RemoteAddress any 
       Write-Output "Firewall Rule 'OpenSSH-Server-In-TCP' updated"
-      --//--
+      </powershell>
+      <persist>true</persist>
