@@ -29,7 +29,7 @@ data:
   dynamic.windows-c4xlarge-amd64.region: "eu-central-1"
   dynamic.windows-c4xlarge-amd64.ami: "ami-06916cb2793070d01"
   dynamic.windows-c4xlarge-amd64.instance-type: "c5.4xlarge"
-  dynamic.windows-c4xlarge-amd64.key-name: "konflux-test-string"
+  dynamic.windows-c4xlarge-amd64.key-name: "id_rsa"
   dynamic.windows-c4xlarge-amd64.aws-secret: "aws-account"
   dynamic.windows-c4xlarge-amd64.ssh-secret: "aws-ssh-key"
   dynamic.windows-c4xlarge-amd64.security-group-id: "sg-0b80a3a448341f78f"

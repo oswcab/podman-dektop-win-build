@@ -1,0 +1,21 @@
+---
+apiVersion: tekton.dev/v1
+kind: TaskRun
+metadata:
+  name: run-script-remote-win-task
+  labels:
+    test-task-type: aws-task
+spec:
+  taskRef:
+    name: run-script-remote-oci-ta
+  params:
+  - name: SCRIPT_RUNNER_IMAGE
+    value: ""
+  - name: "SCRIPT"
+    value: -|
+      echo "I'm in powershell"
+  - name: SCRIPT_WORKDIR
+    value: "C:\\"
+  - name: PLATFORM
+    value: windows/c4xlarge-amd64
+
