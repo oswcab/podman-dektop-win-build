@@ -18,4 +18,3 @@ spec:
     value: "C:\\"
   - name: PLATFORM
     value: windows/c4xlarge-amd64
-
