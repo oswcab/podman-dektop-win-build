@@ -10,7 +10,7 @@ spec:
     name: run-script-remote-oci-ta
   params:
   - name: SCRIPT_RUNNER_IMAGE
-    value: ""
+    value: "mcr.microsoft.com/windows/servercore:ltsc2025"
   - name: "SCRIPT"
     value: -|
       echo "I'm in powershell"
