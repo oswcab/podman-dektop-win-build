@@ -1,0 +1,3 @@
+[submodule "dependencies/multi-platform-controller/src"]
+	path = dependencies/multi-platform-controller/src
+	url = https://github.com/filariow/multi-platform-controller
