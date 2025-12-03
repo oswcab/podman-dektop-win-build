@@ -25,13 +25,13 @@ data:
     "
 
   # WINDOWS MACHINE 
-  dynamic.windows-c4xlarge-amd64.key-name: "filario-dev"  # CHANGE ME IF YOU'RE NOT FILARIO
-  dynamic.windows-c4xlarge-amd64.security-group-id: "sg-0b80a3a448341f78f"
-  dynamic.windows-c4xlarge-amd64.subnet-id: "subnet-04a23e045f37fbb79"
-  dynamic.windows-c4xlarge-amd64.region: "eu-central-1"
+  dynamic.windows-c4xlarge-amd64.key-name: "hcaballe-winserver-core"
+  dynamic.windows-c4xlarge-amd64.security-group-id: "sg-09de7005705681d81"
+  dynamic.windows-c4xlarge-amd64.subnet-id: "subnet-0756a134f52dcfacf"
+  dynamic.windows-c4xlarge-amd64.region: "us-east-1"
 
   dynamic.windows-c4xlarge-amd64.type: "aws"
-  dynamic.windows-c4xlarge-amd64.ami: "ami-06916cb2793070d01"
+  dynamic.windows-c4xlarge-amd64.ami: "ami-0cf643428c5013531"
   dynamic.windows-c4xlarge-amd64.instance-type: "c5.4xlarge"
   dynamic.windows-c4xlarge-amd64.aws-secret: "aws-account"
   dynamic.windows-c4xlarge-amd64.ssh-secret: "aws-ssh-key"
