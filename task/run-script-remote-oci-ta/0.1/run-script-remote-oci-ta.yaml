@@ -141,8 +141,8 @@ spec:
         ssh $SSH_ARGS "$SSH_HOST" "powershell -Command docker run --rm --mount ${SCRIPTS_VOLUME_MOUNT} --mount ${RESULTS_VOLUME_MOUNT} --workdir ${SCRIPT_WORKDIR@Q} install-dependencies powershell -File ${SCRIPT_FULLPATH@Q}"
 
         echo "[$(date --utc -Ins)] Scp back"
-        scp -r "${SSH_HOST}:${LBUILD_DIR}volumes/shared/" '/shared/'
-        scp -r "${SSH_HOST}:${LBUILD_DIR}volumes/workdir/" '/var/workdir/'
+        scp -r "${SSH_HOST}:${LBUILD_DIR}/volumes/shared/" '/shared/'
+        scp -r "${SSH_HOST}:${LBUILD_DIR}/volumes/workdir/" '/var/workdir/'
         scp -r "${SSH_HOST}:${LBUILD_DIR}/results/" '/tekton/results/'
       securityContext:
         capabilities:
