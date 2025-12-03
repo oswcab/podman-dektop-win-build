@@ -11,10 +11,17 @@ spec:
   params:
   - name: SCRIPT_RUNNER_IMAGE
     value: "mcr.microsoft.com/windows/servercore:ltsc2025"
+  - name: "SCRIPT_DEPENDENCIES"
+    value: |
+      Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+      choco install git nodejs pnpm --confirm --limit-output --timeout 216000
   - name: "SCRIPT"
-    value: -|
-      echo "I'm in powershell"
+    value: |
+      git clone https://github.com/podman-desktop/podman-desktop --depth 1
+      cd podman-desktop
+      pnpm install
+      pnpm compile:current
   - name: SCRIPT_WORKDIR
-    value: "C:\\"
+    value: "C:\\scripts\\"
   - name: PLATFORM
     value: windows/c4xlarge-amd64
