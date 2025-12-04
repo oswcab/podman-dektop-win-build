@@ -1,0 +1,24 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+        system-reserved: memory=8Gi
+  extraPortMappings:
+  # Container registry
+  - containerPort: 30010
+    hostPort: 8888
+    protocol: TCP
+  # Konflux UI
+  - containerPort: 30011
+    hostPort: 9443
+    protocol: TCP
+  # Pipelines as Code
+  - containerPort: 30012
+    hostPort: 8180
+    protocol: TCP
