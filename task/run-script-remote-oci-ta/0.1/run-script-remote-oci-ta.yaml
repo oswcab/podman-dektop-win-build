@@ -19,6 +19,9 @@ spec:
   - name: SCRIPT
     description: The script to launch
     type: string
+  - name: SCRIPT_DEPENDENCIES
+    description: The script to launch to install dependencies. It will be executed before the SCRIPT
+    type: string
   - name: SCRIPT_WORKDIR
     description: The directory to launch the script from
     type: string
@@ -63,6 +66,8 @@ spec:
           value: $(params.PLATFORM)
         - name: SCRIPT
           value: $(params.SCRIPT)
+        - name: SCRIPT_DEPENDENCIES
+          value: $(params.SCRIPT_DEPENDENCIES)
         - name: SCRIPT_WORKDIR
           value: $(params.SCRIPT_WORKDIR)
         - name: SCRIPT_RUNNER_IMAGE
@@ -73,9 +78,6 @@ spec:
         set -o verbose
 
         # echo "${PLATFORM}" | cut -d'/' -f1
-
-        # Windows Path Separator
-        S='\\'
 
         echo "[$(date --utc -Ins)] Prepare connection"
 
@@ -88,7 +90,8 @@ spec:
         export SSH_HOST=$(cat /ssh/host)
 
         if [ -e "/ssh/otp" ]; then
-          curl --cacert /ssh/otp-ca -XPOST -d @/ssh/otp $(cat /ssh/otp-server) >~/.ssh/id_rsa
+          # TODO: REMOVE THE -k FROM HERE!
+          curl -k --cacert /ssh/otp-ca -XPOST -d @/ssh/otp $(cat /ssh/otp-server) >~/.ssh/id_rsa
           echo "" >> ~/.ssh/id_rsa
         else
           cp /ssh/id_rsa ~/.ssh
@@ -102,33 +105,45 @@ spec:
         export SSH_ARGS="-o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=10"
         echo "$BUILD_DIR"
         # shellcheck disable=SC2086
-        ssh $SSH_ARGS "$SSH_HOST"  mkdir -p "${BUILD_DIR@Q}${S}workspaces" "${BUILD_DIR@Q}${S}scripts" "${BUILD_DIR@Q}${S}volumes"
+
+        # Windows Path Separator
+        S='\\'
+        VOLUMES_DIR="${BUILD_DIR}${S}volumes"
+        ssh $SSH_ARGS "$SSH_HOST" "powershell -Command New-Item -ItemType Directory -Force -Path ${VOLUMES_DIR@Q}"
+        SCRIPTS_DIR="${BUILD_DIR}${S}scripts"
+        ssh $SSH_ARGS "$SSH_HOST" "powershell -Command New-Item -ItemType Directory -Force -Path ${SCRIPTS_DIR@Q}"
+        WORKSPACES_DIR="${BUILD_DIR}${S}workspaces"
+        ssh $SSH_ARGS "$SSH_HOST" "powershell -Command New-Item -ItemType Directory -Force -Path ${WORKSPACES_DIR@Q}"
 
         echo "[$(date --utc -Ins)] Scp data"
 
-        printf '%s' "$SCRIPT" > /tmp/script.ps1
-        # rsync -razW "/tmp/script.ps1" "$SSH_HOST:$BUILD_DIR${S}scripts${S}script.ps1"
-        # rsync -razW '/shared/' "$SSH_HOST:$BUILD_DIR${S}volumes${S}shared${S}"
-        # rsync -razW '/var/workdir/' "$SSH_HOST:$BUILD_DIR${S}volumes${S}workdir${S}"
-        # rsync -razW "/tekton/results/" "$SSH_HOST:$BUILD_DIR${S}results${S}"
-        scp "/tmp/script.ps1" "$SSH_HOST:$BUILD_DIR${S}scripts${S}script.ps1"
-        scp '/shared/' "$SSH_HOST:$BUILD_DIR${S}volumes${S}shared${S}"
-        scp '/var/workdir/' "$SSH_HOST:$BUILD_DIR${S}volumes${S}workdir${S}"
-        scp "/tekton/results/" "$SSH_HOST:$BUILD_DIR${S}results${S}"
+        LBUILD_DIR=$(echo "$BUILD_DIR" | sed 's|\\\\|/|g' | sed 's|\\|/|g' )
 
-        ssh $SSH_ARGS "$SSH_HOST" $PORT_FORWARD docker run \
-          -v "${BUILD_DIR@Q}${S}volumes${S}shared:C:${S}shared" \
-          -v "${BUILD_DIR@Q}${S}volumes${S}workdir:C:${S}var${S}workdir" \
-          -v "${BUILD_DIR@Q}${S}results${S}:C:${S}tekton${S}results" \
-          -v "${BUILD_DIR@Q}${S}scripts:${SCRIPT_WORKDIR@Q}${S}scripts" \
-          --rm \
-          "${SCRIPT_RUNNER_IMAGE@Q}" \
-          "${SCRIPT_WORKDIR@Q}${S}script.ps1"
+        printf '%s' "${SCRIPT}" > /tmp/script.ps1
+        scp "/tmp/script.ps1" "${SSH_HOST}:${LBUILD_DIR}/scripts/script.ps1"
+                printf '%s' "${SCRIPT_DEPENDENCIES}" > /tmp/script_dependencies.ps1
+        scp "/tmp/script_dependencies.ps1" "${SSH_HOST}:${LBUILD_DIR}/scripts/script_dependencies.ps1"
 
-        echo "[$(date --utc -Ins)] Rsync back"
-        scp "$SSH_HOST:$BUILD_DIR${S}volumes${S}shared${S}" '/shared/'
-        scp "$SSH_HOST:$BUILD_DIR${S}volumes${S}workdir${S}" '/var/workdir/'
-        scp "$SSH_HOST:$BUILD_DIR${S}results${S}" '/tekton/results/'
+        scp -r '/shared/' "${SSH_HOST}:${LBUILD_DIR}/volumes/shared/"
+        scp -r '/var/workdir/' "${SSH_HOST}:${LBUILD_DIR}/volumes/workdir/"
+        scp -r "/tekton/results/" "${SSH_HOST}:${LBUILD_DIR}/results/"
+
+        echo "[$(date --utc -Ins)] Run docker container"
+
+        WORKDIR_VOLUME_MOUNT="type=bind,source=${LBUILD_DIR}/volumes/workdir/,target=C:/workdir/"
+        SHARED_VOLUME_MOUNT="type=bind,source=${LBUILD_DIR}/volumes/shared/,target=C:/shared"
+        RESULTS_VOLUME_MOUNT="type=bind,source=${LBUILD_DIR}/results/,target=C:/tekton/results/"
+        SCRIPTS_VOLUME_MOUNT="type=bind,source=${LBUILD_DIR}/scripts/,target=${SCRIPT_WORKDIR}"
+        SCRIPT_DEPENDENCIES_FULLPATH="${SCRIPT_WORKDIR}script_dependencies.ps1"
+        ssh $SSH_ARGS "$SSH_HOST" "powershell -Command docker run --name install-dependencies --mount ${SCRIPTS_VOLUME_MOUNT} --mount ${RESULTS_VOLUME_MOUNT} --workdir ${SCRIPT_WORKDIR@Q} ${SCRIPT_RUNNER_IMAGE@Q} powershell -File ${SCRIPT_DEPENDENCIES_FULLPATH@Q}"
+        ssh $SSH_ARGS "$SSH_HOST" "powershell -Command docker commit install-dependencies install-dependencies"
+        SCRIPT_FULLPATH="${SCRIPT_WORKDIR}script.ps1"
+        ssh $SSH_ARGS "$SSH_HOST" "powershell -Command docker run --rm --mount ${SCRIPTS_VOLUME_MOUNT} --mount ${RESULTS_VOLUME_MOUNT} --workdir ${SCRIPT_WORKDIR@Q} install-dependencies powershell -File ${SCRIPT_FULLPATH@Q}"
+
+        echo "[$(date --utc -Ins)] Scp back"
+        scp -r "${SSH_HOST}:${LBUILD_DIR}/volumes/shared/" '/shared/'
+        scp -r "${SSH_HOST}:${LBUILD_DIR}/volumes/workdir/" '/var/workdir/'
+        scp -r "${SSH_HOST}:${LBUILD_DIR}/results/" '/tekton/results/'
       securityContext:
         capabilities:
           add:

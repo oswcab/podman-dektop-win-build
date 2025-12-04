@@ -1,3 +1,6 @@
 [submodule "dependencies/multi-platform-controller/src"]
 	path = dependencies/multi-platform-controller/src
 	url = https://github.com/filariow/multi-platform-controller
+[submodule "dependencies/konflux-ci/src"]
+	path = dependencies/konflux-ci/src
+	url = https://github.com/konflux-ci/konflux-ci.git
