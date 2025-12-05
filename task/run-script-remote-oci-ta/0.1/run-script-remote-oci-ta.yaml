@@ -28,6 +28,22 @@ spec:
   - description: The platform to build on
     name: PLATFORM
     type: string
+  - name: ociStorage
+    description: The OCI repository where the Trusted Artifacts are stored (e.g., quay.io/myorg/artifacts)
+    type: string
+    default: ""
+  - name: ociArtifactExpiresAfter
+    description: Expiration date for the trusted artifacts created in the OCI repository (e.g., 30d, 90d). Empty string means no expiration.
+    type: string
+    default: ""
+  - name: SCRIPT_ARTIFACT_RELATIVE_PATH
+    description: Relative path within /shared/ to package as OCI artifact
+    type: string
+    default: "."
+  - name: REGISTRY_SECRET
+    description: Name of the secret containing registry credentials (dockerconfigjson type)
+    type: string
+    default: ""
   results:
     - name: SCRIPT_ARTIFACT
       description: The Trusted Artifact URI pointing to the artifact with
@@ -148,6 +164,36 @@ spec:
         capabilities:
           add:
             - SETFCAP
+
+    - name: create-trusted-artifact
+      image: quay.io/konflux-ci/build-trusted-artifacts:latest@sha256:adf22f3ec90bfa3f7e2c832a7d52febd1ea31aa9fff6db21324c965d7d622327
+      args:
+        - create
+        - --store
+        - $(params.ociStorage)
+        - $(results.SCRIPT_ARTIFACT.path)=/shared/$(params.SCRIPT_ARTIFACT_RELATIVE_PATH)
+      volumeMounts:
+        - mountPath: /shared
+          name: shared
+        - mountPath: /root/.docker
+          name: registry-auth
+          readOnly: true
+      env:
+        - name: IMAGE_EXPIRES_AFTER
+          value: $(params.ociArtifactExpiresAfter)
+        - name: REGISTRY_AUTH_FILE
+          value: /root/.docker/config.json
+      when:
+        - input: "$(params.ociStorage)"
+          operator: notin
+          values: [""]
+      computeResources:
+        limits:
+          memory: 1Gi
+        requests:
+          cpu: 250m
+          memory: 512Mi
+
   volumes:
   - name: workdir
     emptyDir: {}
@@ -159,6 +205,13 @@ spec:
       secretName: $(params.ADDITIONAL_SECRET)
   - emptyDir: {}
     name: shared
+  - name: registry-auth
+    secret:
+      optional: true
+      secretName: $(params.REGISTRY_SECRET)
+      items:
+        - key: .dockerconfigjson
+          path: config.json
   - name: ssh
     secret:
       optional: false
