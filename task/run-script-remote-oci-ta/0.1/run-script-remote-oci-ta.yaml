@@ -28,6 +28,22 @@ spec:
   - description: The platform to build on
     name: PLATFORM
     type: string
+  - name: ociStorage
+    description: The OCI repository where the Trusted Artifacts are stored (e.g., quay.io/myorg/artifacts)
+    type: string
+    default: ""
+  - name: ociArtifactExpiresAfter
+    description: Expiration date for the trusted artifacts created in the OCI repository (e.g., 30d, 90d). Empty string means no expiration.
+    type: string
+    default: ""
+  - name: SCRIPT_ARTIFACT_RELATIVE_PATH
+    description: Relative path within /tekton/results/ to package as OCI artifact
+    type: string
+    default: "."
+  - name: REGISTRY_SECRET
+    description: Name of the secret containing registry credentials (dockerconfigjson type)
+    type: string
+    default: ""
   results:
     - name: SCRIPT_ARTIFACT
       description: The Trusted Artifact URI pointing to the artifact with
@@ -51,8 +67,6 @@ spec:
     - name: PLATFORM
       value: $(params.PLATFORM)
     volumeMounts:
-    - mountPath: /shared
-      name: shared
     - mountPath: /var/workdir
       name: workdir
     - mountPath: /ssh/
@@ -114,6 +128,8 @@ spec:
         ssh $SSH_ARGS "$SSH_HOST" "powershell -Command New-Item -ItemType Directory -Force -Path ${SCRIPTS_DIR@Q}"
         WORKSPACES_DIR="${BUILD_DIR}${S}workspaces"
         ssh $SSH_ARGS "$SSH_HOST" "powershell -Command New-Item -ItemType Directory -Force -Path ${WORKSPACES_DIR@Q}"
+        RESULTS_DIR="${BUILD_DIR}${S}results"
+        ssh $SSH_ARGS "$SSH_HOST" "powershell -Command New-Item -ItemType Directory -Force -Path ${RESULTS_DIR@Q}"
 
         echo "[$(date --utc -Ins)] Scp data"
 
@@ -124,30 +140,57 @@ spec:
                 printf '%s' "${SCRIPT_DEPENDENCIES}" > /tmp/script_dependencies.ps1
         scp "/tmp/script_dependencies.ps1" "${SSH_HOST}:${LBUILD_DIR}/scripts/script_dependencies.ps1"
 
-        scp -r '/shared/' "${SSH_HOST}:${LBUILD_DIR}/volumes/shared/"
         scp -r '/var/workdir/' "${SSH_HOST}:${LBUILD_DIR}/volumes/workdir/"
-        scp -r "/tekton/results/" "${SSH_HOST}:${LBUILD_DIR}/results/"
 
         echo "[$(date --utc -Ins)] Run docker container"
 
         WORKDIR_VOLUME_MOUNT="type=bind,source=${LBUILD_DIR}/volumes/workdir/,target=C:/workdir/"
-        SHARED_VOLUME_MOUNT="type=bind,source=${LBUILD_DIR}/volumes/shared/,target=C:/shared"
         RESULTS_VOLUME_MOUNT="type=bind,source=${LBUILD_DIR}/results/,target=C:/tekton/results/"
         SCRIPTS_VOLUME_MOUNT="type=bind,source=${LBUILD_DIR}/scripts/,target=${SCRIPT_WORKDIR}"
         SCRIPT_DEPENDENCIES_FULLPATH="${SCRIPT_WORKDIR}script_dependencies.ps1"
         ssh $SSH_ARGS "$SSH_HOST" "powershell -Command docker run --name install-dependencies --mount ${SCRIPTS_VOLUME_MOUNT} --mount ${RESULTS_VOLUME_MOUNT} --workdir ${SCRIPT_WORKDIR@Q} ${SCRIPT_RUNNER_IMAGE@Q} powershell -File ${SCRIPT_DEPENDENCIES_FULLPATH@Q}"
         ssh $SSH_ARGS "$SSH_HOST" "powershell -Command docker commit install-dependencies install-dependencies"
         SCRIPT_FULLPATH="${SCRIPT_WORKDIR}script.ps1"
-        ssh $SSH_ARGS "$SSH_HOST" "powershell -Command docker run --rm --mount ${SCRIPTS_VOLUME_MOUNT} --mount ${RESULTS_VOLUME_MOUNT} --workdir ${SCRIPT_WORKDIR@Q} install-dependencies powershell -File ${SCRIPT_FULLPATH@Q}"
+        ssh $SSH_ARGS "$SSH_HOST" "powershell -Command docker run --rm --mount ${SCRIPTS_VOLUME_MOUNT} --mount ${WORKDIR_VOLUME_MOUNT} --mount ${RESULTS_VOLUME_MOUNT} --workdir ${SCRIPT_WORKDIR@Q} install-dependencies powershell -File ${SCRIPT_FULLPATH@Q}"
 
         echo "[$(date --utc -Ins)] Scp back"
-        scp -r "${SSH_HOST}:${LBUILD_DIR}/volumes/shared/" '/shared/'
         scp -r "${SSH_HOST}:${LBUILD_DIR}/volumes/workdir/" '/var/workdir/'
-        scp -r "${SSH_HOST}:${LBUILD_DIR}/results/" '/tekton/results/'
+        scp -r "${SSH_HOST}:${LBUILD_DIR}/results/*" '/tekton/results/'
+        echo "Contents of /tekton/results/ after scp:"
+        ls -lah /tekton/results/
+        find /tekton/results/ -type f | head -20
       securityContext:
         capabilities:
           add:
             - SETFCAP
+
+    - name: create-trusted-artifact
+      image: quay.io/konflux-ci/build-trusted-artifacts:latest@sha256:adf22f3ec90bfa3f7e2c832a7d52febd1ea31aa9fff6db21324c965d7d622327
+      args:
+        - create
+        - --store
+        - $(params.ociStorage)
+        - $(results.SCRIPT_ARTIFACT.path)=/tekton/results/$(params.SCRIPT_ARTIFACT_RELATIVE_PATH)
+      volumeMounts:
+        - mountPath: /root/.docker
+          name: registry-auth
+          readOnly: true
+      env:
+        - name: IMAGE_EXPIRES_AFTER
+          value: $(params.ociArtifactExpiresAfter)
+        - name: REGISTRY_AUTH_FILE
+          value: /root/.docker/config.json
+      when:
+        - input: "$(params.ociStorage)"
+          operator: notin
+          values: [""]
+      computeResources:
+        limits:
+          memory: 1Gi
+        requests:
+          cpu: 250m
+          memory: 512Mi
+
   volumes:
   - name: workdir
     emptyDir: {}
@@ -157,8 +200,13 @@ spec:
     secret:
       optional: true
       secretName: $(params.ADDITIONAL_SECRET)
-  - emptyDir: {}
-    name: shared
+  - name: registry-auth
+    secret:
+      optional: true
+      secretName: $(params.REGISTRY_SECRET)
+      items:
+        - key: .dockerconfigjson
+          path: config.json
   - name: ssh
     secret:
       optional: false

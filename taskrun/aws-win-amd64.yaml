@@ -17,11 +17,43 @@ spec:
       choco install git nodejs pnpm --confirm --limit-output --timeout 216000
   - name: "SCRIPT"
     value: |
+      # Clone and build Podman Desktop
       git clone https://github.com/podman-desktop/podman-desktop --depth 1
       cd podman-desktop
       pnpm install
       pnpm compile:current
+
+      # Prepare artifacts for OCI publishing
+      New-Item -ItemType Directory -Force -Path C:/tekton/results/build-artifacts | Out-Null
+
+      # Copy build outputs
+      if (Test-Path "dist") {
+        Copy-Item -Recurse -Force dist/* C:/tekton/results/build-artifacts/
+        Write-Host "Build artifacts copied to C:/tekton/results/build-artifacts/"
+      } else {
+        Write-Host "Warning: dist directory not found"
+      }
+
+      # Create build manifest
+      $manifest = @{
+        "build_time" = Get-Date -Format o
+        "platform" = "windows-amd64"
+        "project" = "podman-desktop"
+        "task" = "run-script-remote-win-task"
+      }
+      $manifest | ConvertTo-Json | Out-File C:/tekton/results/build-artifacts/build-manifest.json
+
+      Write-Host "Build artifacts prepared:"
+      Get-ChildItem C:/tekton/results/build-artifacts/ -Recurse | Select-Object FullName, Length
   - name: SCRIPT_WORKDIR
     value: "C:\\scripts\\"
   - name: PLATFORM
     value: windows/c4xlarge-amd64
+  - name: ociStorage
+    value: "quay.io/podman_desk_windows/artifacts"
+  - name: ociArtifactExpiresAfter
+    value: "30d"
+  - name: SCRIPT_ARTIFACT_RELATIVE_PATH
+    value: "build-artifacts"
+  - name: REGISTRY_SECRET
+    value: "podman-desk-windows-pull-secret"
